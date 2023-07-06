@@ -39,110 +39,123 @@ def run():
 
 #    load data from the file
 
-    filename = r'dataset.mat' 
-    
-    tmp = sio.loadmat(filename)
-    xdata=np.array(tmp['EEGsample'])
-    label=np.array(tmp['substate'])
-    subIdx=np.array(tmp['subindex'])
+    acc_snr = []
+    filename = r'dataset.mat'
+    filenames_test = [r'dataset.mat', r'dataset5.mat', r'dataset4.mat', r'dataset3.mat', r'dataset2.mat', r'dataset1.mat', r'dataset0.mat', r'dataset_1.mat', r'dataset_2.mat', r'dataset_3.mat', r'dataset_4.mat', r'dataset_5.mat', r'dataset_6.mat', r'dataset_snr_7.mat'] 
+    for i in range (0, len(filenames_test)):
+        filename_test = filenames_test[i] 
 
-    label.astype(int)
-    subIdx.astype(int)
-    
-    samplenum=label.shape[0]
-    
-#   there are 11 subjects in the dataset. Each sample is 3-seconds data from 30 channels with sampling rate of 128Hz. 
-    channelnum=30
-    subjnum=11
-    samplelength=3
-    sf=128
-    
-#   define the learning rate, batch size and epoches
-    lr=1e-2 
-    batch_size = 50
-    n_epoch =6 
-    
-#   ydata contains the label of samples   
-    ydata=np.zeros(samplenum,dtype=np.longlong)
-    
-    for i in range(samplenum):
-        ydata[i]=label[i]
+        tmp = sio.loadmat(filename)
+        xdata=np.array(tmp['EEGsample'])
+        label=np.array(tmp['substate'])
+        subIdx=np.array(tmp['subindex'])
 
-#   only channel 28 is used, which corresponds to the Oz channel
-    selectedchan=[28]
+        label.astype(int)
+        subIdx.astype(int)
     
-#   update the xdata and channel number    
-    xdata=xdata[:,selectedchan,:]
-    channelnum=len(selectedchan)
-    
-#   the result stores accuracies of every subject     
-    results=np.zeros(subjnum)
-    
-    
-    
-#   it performs leave-one-subject-out training and classfication 
-#   for each iteration, the subject i is the testing subject while all the other subjects are the training subjects.      
-    for i in range(1,subjnum+1):
+        samplenum=label.shape[0]
 
-#       form the training data        
-        trainindx=np.where(subIdx != i)[0] 
-        xtrain=xdata[trainindx]   
-        x_train = xtrain.reshape(xtrain.shape[0],1,channelnum, samplelength*sf)
-        y_train=ydata[trainindx]
+        #for the test 
+        tmp_test = sio.loadmat(filename_test)
+        xdata_test = np.array(tmp_test['EEGsample'])
+    
+    #   there are 11 subjects in the dataset. Each sample is 3-seconds data from 30 channels with sampling rate of 128Hz. 
+        channelnum=30
+        subjnum=11
+        samplelength=3
+        sf=128
+    
+    #   define the learning rate, batch size and epoches
+        lr=1e-2 
+        batch_size = 50
+        n_epoch =6 
+    
+    #   ydata contains the label of samples   
+        ydata=np.zeros(samplenum,dtype=np.longlong)
+    
+        for i in range(samplenum):
+            ydata[i]=label[i]
+
+    #   only channel 28 is used, which corresponds to the Oz channel
+        selectedchan=[28]
+    
+    #   update the xdata and channel number    
+        xdata = xdata[:,selectedchan,:]
+        xdata_test = xdata_test[:,selectedchan,:]
+        channelnum=len(selectedchan)
+    
+    #   the result stores accuracies of every subject     
+        results = np.zeros(subjnum)
+    
+    
+    
+    #   it performs leave-one-subject-out training and classfication 
+    #   for each iteration, the subject i is the testing subject while all the other subjects are the training subjects.      
+        for i in range(1,subjnum+1):
+
+    #       form the training data        
+            trainindx = np.where(subIdx != i)[0] 
+            xtrain = xdata[trainindx]   
+            x_train = xtrain.reshape(xtrain.shape[0],1,channelnum, samplelength*sf)
+            y_train = ydata[trainindx]
                 
         
-#       form the testing data         
-        testindx=np.where(subIdx == i)[0]    
-        xtest=xdata[testindx]
-        x_test = xtest.reshape(xtest.shape[0], 1,channelnum, samplelength*sf)
-        y_test=ydata[testindx]
+    #       form the testing data         
+            testindx = np.where(subIdx == i)[0]    
+            xtest = xdata_test[testindx]
+            x_test = xtest.reshape(xtest.shape[0], 1,channelnum, samplelength*sf)
+            y_test=ydata[testindx]
     
 
-        train = torch.utils.data.TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
-        train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=True)
+            train = torch.utils.data.TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
+            train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=True)
 
-#       load the CNN model to deal with 1D EEG signals
-        my_net = CompactCNN().double().cuda()
+    #       load the CNN model to deal with 1D EEG signals
+            my_net = CompactCNN().double().cuda()
 
    
-        optimizer = optim.Adam(my_net.parameters(), lr=lr)    
-        loss_class = torch.nn.NLLLoss().cuda()
+            optimizer = optim.Adam(my_net.parameters(), lr=lr)    
+            loss_class = torch.nn.NLLLoss().cuda()
 
-        for p in my_net.parameters():
-            p.requires_grad = True    
+            for p in my_net.parameters():
+                p.requires_grad = True    
   
-#        train the classifier 
-        for epoch in range(n_epoch):   
-            for j, data in enumerate(train_loader, 0):
-                inputs, labels = data                
+    #        train the classifier 
+            for epoch in range(n_epoch):   
+                for j, data in enumerate(train_loader, 0):
+                    inputs, labels = data                
                 
-                input_data = inputs.cuda()
-                class_label = labels.cuda()              
+                    input_data = inputs.cuda()
+                    class_label = labels.cuda()              
 
-                my_net.zero_grad()               
-                my_net.train()          
+                    my_net.zero_grad()               
+                    my_net.train()          
    
-                class_output= my_net(input_data) 
-                err_s_label = loss_class(class_output, class_label)
-                err = err_s_label 
+                    class_output= my_net(input_data) 
+                    err_s_label = loss_class(class_output, class_label)
+                    err = err_s_label 
              
-                err.backward()
-                optimizer.step()
+                    err.backward()
+                    optimizer.step()
 
-#       test the results
-        my_net.train(False)
-        with torch.no_grad():
-            x_test =  torch.DoubleTensor(x_test).cuda()
-            answer = my_net(x_test)
-            probs=answer.cpu().numpy()
-            preds       = probs.argmax(axis = -1)  
-            acc=accuracy_score(y_test, preds)
+    #       test the results
+            my_net.train(False)
+            with torch.no_grad():
+                x_test =  torch.DoubleTensor(x_test).cuda()
+                answer = my_net(x_test)
+                probs=answer.cpu().numpy()
+                preds       = probs.argmax(axis = -1)  
+                acc=accuracy_score(y_test, preds)
 
-            print(acc)
-            results[i-1]=acc
+                print(acc)
+                results[i-1]=acc
             
             
-    print('mean accuracy:',np.mean(results))
+            
+        print('mean accuracy:',np.mean(results))
+        acc_snr.append(np.mean(results))
+    acc_snr_np = np.array(acc_snr)
+    np.save('results_acc.npy', acc_snr_np)
 
 if __name__ == '__main__':
     run()
